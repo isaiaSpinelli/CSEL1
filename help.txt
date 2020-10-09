@@ -1,0 +1,13 @@
+# cible : 
+gdbserver 192.168.0.4:1234 /usr/workspace/csel1/environment/fibonacci/app
+
+
+# hote 
+
+~/workspace/nano/buildroot/output/host/usr/bin/aarch64-none-linux-gnu-gdb app
+set sysroot ~/workspace/nano/buildroot/output/staging
+target remote 192.168.0.14:1234
+ ...
+break main
+continue
+...

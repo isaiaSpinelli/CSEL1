@@ -1,0 +1,1 @@
+cmd_/home/lmi/workspace/csel1/Modules_Ex/mymodule.o := /home/lmi/workspace/nano/buildroot/output/host/usr/bin/aarch64-none-linux-gnu-ld  -EL  -maarch64elf    -r -o /home/lmi/workspace/csel1/Modules_Ex/mymodule.o /home/lmi/workspace/csel1/Modules_Ex/skeleton.o

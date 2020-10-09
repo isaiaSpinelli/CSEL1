@@ -1,0 +1,1 @@
+cmd_/home/lmi/workspace/csel1/Modules_Ex/Module.symvers := sed 's/ko$$/o/' /home/lmi/workspace/csel1/Modules_Ex/modules.order | scripts/mod/modpost     -o /home/lmi/workspace/csel1/Modules_Ex/Module.symvers -e -i Module.symvers   -T -
