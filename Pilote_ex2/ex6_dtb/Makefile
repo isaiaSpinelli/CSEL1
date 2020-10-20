@@ -16,13 +16,25 @@ PWD := $(shell pwd)
 #MODPATH := $(HOME)/workspace/buildroot/output/target # production mode
 MODPATH := /home/lmi/workspace/nano/rootfs
 
+DTB = mydtb.dtb
+DTS = $(DTB:.dtb=.dts)
+INCL =-I. -I$(KDIR)/include -I$(KDIR)/arch/arm64/boot/dts
+
+dtb: $(DTB)
+
 all:
 	$(MAKE) -C $(KDIR) M=$(PWD) ARCH=$(CPU) CROSS_COMPILE=$(TOOLS) modules
 	
 clean:
 	$(MAKE) -C $(KDIR) M=$(PWD) clean
+
 	
 install:
 	$(MAKE) -C $(KDIR) M=$(PWD) INSTALL_MOD_PATH=$(MODPATH) modules_install
+
+$(DTB) : $(DTS)
+	ln -s $(KDIR)/arch/arm/boot/dts arm
+	-cpp $(INCL) -E -P -x assembler-with-cpp $(DTS) | dtc -I dts -O dtb -o $(DTB) -
+	rm arm
 
 endif

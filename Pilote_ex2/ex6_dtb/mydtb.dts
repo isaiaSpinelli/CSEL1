@@ -1,0 +1,28 @@
+/dts-v1/;
+
+#include "allwinner/sun50i-h5-nanopi-neo-plus2.dts"
+
+
+/ {
+
+	mydevice {
+		compatible = "mydevice";
+		#address-cells = <1>;
+		#size-cells = <0>;
+
+		mydevice@0 {
+			reg = <0>;
+			attribute = "on";
+		};
+
+		mydevice@1 {
+			eg = <1>;
+			attribute = "on";
+		};
+		
+		mydevice@2 {
+			reg = <2>;
+			attribute = "off";
+		};
+	};
+};
