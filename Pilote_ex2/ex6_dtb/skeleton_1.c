@@ -1,6 +1,6 @@
 /*
  * Spinelli Isaia
- * N device dynamique via le dtb et miscdevice
+ * N device (dans le dtb) avec miscdevice
 */
 
 /* skeleton.c */
@@ -16,18 +16,13 @@
 
 #define BUFFER_SIZE	 1024
 
-/* Structure permettant de mémoriser les informations importantes du module */
-struct priv
-{	
-	char *global_buffer;
-	int *buffer_size;
-	
-	int NB_Devices;
-	
-	struct miscdevice* mymisc;
-	int offset_minor;
-};
+char *global_buffer;
+int *buffer_size;
+int NB_Devices=-1;
 
+
+struct miscdevice* mymisc;
+int offset_minor;
 
 int countDeviceOn(struct device_node* dt_node);
 
@@ -38,28 +33,15 @@ static ssize_t skeleton_write(struct file *filp, const char __user *buf,
 			size_t count, loff_t *ppos);
 
 
-static int skeleton__open(struct inode* node, struct file * f);
 
 // Structure constante statique pour les différentes opérations 
 const static struct file_operations my_fops = {
     .owner         = THIS_MODULE,
     .read          = skeleton_read,
     .write         = skeleton_write,
-    .open          = skeleton__open,
 };
 
 
-
-static int skeleton__open(struct inode* node, struct file * f){
-	
-	/* Récupération des informations du module (structure privée) */
-    //struct priv *private_data ;
-    //private_data = container_of(node->i_cdev, struct priv, my_cdev);
-    /* Placement de la structure privée dans les data du fichier */
-    //f->private_data = private_data;
-    
-    return 0;
-}
 
 /*
  * Permet de lire un fichier(buffer global) depuis l'espace utilisateur
@@ -67,39 +49,29 @@ static int skeleton__open(struct inode* node, struct file * f){
 static ssize_t skeleton_read(struct file *filp, char __user *buf,
             size_t count, loff_t *ppos)
 {	
-	int idx ;
-	struct priv *private_data ;
-	
-	struct miscdevice *miscdev = filp->private_data;
-
-    private_data = container_of(&miscdev, struct priv, mymisc);
-	
-	/* Récupération des informations du module (structure privée) */
-	//private_data = (struct priv *) filp->private_data;
-	
     // Crée l'index du tableau en fonction du numero minor
-    idx = (private_data->offset_minor - iminor(filp->f_inode)) * BUFFER_SIZE;
+    int idx = (offset_minor - iminor(filp->f_inode)) * BUFFER_SIZE;
     
     pr_info ("Lecture !\n");
     
-    if (buf == 0 || count < private_data->buffer_size[idx]) {
+    if (buf == 0 || count < buffer_size[idx]) {
         return 0;
     }
     
-     if (*ppos >= private_data->buffer_size[idx]) {
+     if (*ppos >= buffer_size[idx]) {
         return 0;
     }
 
     
     // Copier le buffer global dans l'espace utilisateur (buf).
-    if ( copy_to_user(buf, (private_data->global_buffer+idx), private_data->buffer_size[idx]) != 0 ) {
+    if ( copy_to_user(buf, (global_buffer+idx), buffer_size[idx]) != 0 ) {
 		return 0;
 	}
 	
 	// màj de la position
-    *ppos = private_data->buffer_size[idx];
+    *ppos = buffer_size[idx];
 
-    return private_data->buffer_size[idx];
+    return buffer_size[idx];
     
 }
 
@@ -111,15 +83,8 @@ static ssize_t skeleton_read(struct file *filp, char __user *buf,
 static ssize_t skeleton_write(struct file *filp, const char __user *buf,
              size_t count, loff_t *ppos)
              
-{	
-	int idx;
-	struct priv *private_data ;
-	
-	/* Récupération des informations du module (structure privée) */
-	//private_data = (struct priv *) filp->private_data;
-	
-	// Crée l'index du tableau en fonction du numero minor
-	idx = (private_data->offset_minor - iminor(filp->f_inode)) * BUFFER_SIZE;
+{	// Crée l'index du tableau en fonction du numero minor
+	int idx = (offset_minor - iminor(filp->f_inode)) * BUFFER_SIZE;
     
     pr_info ("Ecriture !\n");
     
@@ -137,13 +102,13 @@ static ssize_t skeleton_write(struct file *filp, const char __user *buf,
     
     // Copier un bloc de données à partir de l'espace utilisateur (buf)
 	// dans la mémoire alloué (global buffer)
-	if ( copy_from_user((private_data->global_buffer+idx), buf, count) != 0) { 
+	if ( copy_from_user((global_buffer+idx), buf, count) != 0) { 
 		return 0;
 	}
 
-	(private_data->global_buffer+idx)[count] = '\0';
+	(global_buffer+idx)[count] = '\0';
 	
-	private_data->buffer_size[idx] = count+1;
+	buffer_size[idx] = count+1;
 
 	return count;
 }
@@ -159,33 +124,18 @@ MODULE_LICENSE ("GPL");
 /* Fonction probe appelée lors du "branchement" du périphérique (pdev est un poiteur sur une structure contenant toutes les informations du device détécté) */
 static int skeleton_probe(struct platform_device *pdev)
 {
-	/* Déclaration de la structure priv */
-    struct priv *private_data;
 	int retval;
 	int i =0;
 	struct device_node* dt_node = pdev->dev.of_node;
 	pr_info ("Linux pilote skeleton : skeleton_probe\n");	
 	
-	/* Allocation mémoire kernel pour la structure priv (informations du module)*/
-    private_data = kmalloc(sizeof(*private_data), GFP_KERNEL);
-	/* Si la fonction kmallos à échoué */
-    if (private_data == NULL) {
-        printk(KERN_ERR "Failed to allocate memory for private data!\n");
-		/* Met à jour la valeur de retour (Out of memory)*/
-        return -ENOMEM;
-    }
+	NB_Devices = countDeviceOn(dt_node);
 	
-	
-	/* Lis le pointeur de la structure contenant les informations du module au platform_device coresspondant (permet de le get dans la fonction remove)*/
-    platform_set_drvdata(pdev, private_data);
-	
-	private_data->NB_Devices = countDeviceOn(dt_node);
-	
-	pr_info("NB_Devices = %d \n", private_data->NB_Devices);
+	pr_info("NB_Devices = %d \n", NB_Devices);
 	
 	// Alloue à 0 la structure misc device le nombre de device demandé
-	private_data->mymisc = kzalloc(sizeof(*private_data->mymisc) * private_data->NB_Devices, GFP_KERNEL);
-    if (private_data->mymisc == NULL) {
+	mymisc = kzalloc(sizeof(*mymisc) * NB_Devices, GFP_KERNEL);
+    if (mymisc == NULL) {
         printk(KERN_ERR "Failed to allocate memory for mymisc!\n");
         retval = -ENOMEM;
 		return retval;
@@ -200,11 +150,11 @@ static int skeleton_probe(struct platform_device *pdev)
 			retval = of_property_read_string(child, "attribute", &attr);
 			if (attr && retval == 0){
 				if (strcmp (attr, "on") == 0) {
-					private_data->mymisc[i].minor = MISC_DYNAMIC_MINOR;
-					private_data->mymisc[i].name = child->full_name;
-					private_data->mymisc[i].fops = &my_fops;
-					private_data->mymisc[i].mode = 0777,
-					retval = misc_register(&private_data->mymisc[i]);
+					mymisc[i].minor = MISC_DYNAMIC_MINOR;
+					mymisc[i].name = child->full_name;
+					mymisc[i].fops = &my_fops;
+					mymisc[i].mode = 0777,
+					retval = misc_register(&mymisc[i]);
 					i++;
 					if (retval) return retval;
 				}
@@ -216,19 +166,19 @@ static int skeleton_probe(struct platform_device *pdev)
 	
 	
 	// Enregistre l'offset des numeros minor
-	private_data->offset_minor = private_data->mymisc[0].minor ;
+	offset_minor = mymisc[0].minor ;
 	
 	// Alloue à 0 un tableau 2D x*y  
-	private_data->global_buffer = kzalloc(private_data->NB_Devices * BUFFER_SIZE * sizeof(char) , GFP_KERNEL);
-	if (private_data->global_buffer == NULL) {
+	global_buffer = kzalloc(NB_Devices * BUFFER_SIZE * sizeof(char) , GFP_KERNEL);
+	if (global_buffer == NULL) {
         printk(KERN_ERR "Failed to allocate memory for global_buffer!\n");
         retval = -ENOMEM;
 		return retval;
     }
     
     // Alloue à 0 l index des différents tableau
-    private_data->buffer_size = kzalloc(private_data->NB_Devices * sizeof(int) , GFP_KERNEL);
-	if (private_data->buffer_size == NULL) {
+    buffer_size = kzalloc(NB_Devices * sizeof(int) , GFP_KERNEL);
+	if (buffer_size == NULL) {
         printk(KERN_ERR "Failed to allocate memory for buffer_size!\n");
         retval = -ENOMEM;
 		return retval;
@@ -242,20 +192,16 @@ static int skeleton_probe(struct platform_device *pdev)
 static int skeleton_remove(struct platform_device *pdev)
 {
 	int i;
-	struct priv *private_data;
 	pr_info ("Linux pilote skeleton : skeleton_remove\n");	
 	
-	/* Récupère l'adresse de la structure priv correspondant au platform_device reçu (précèdemment lié dans la fonction probe)*/
-    private_data = platform_get_drvdata(pdev);
-	
-	for(i=0; i < private_data->NB_Devices; ++i){
-		misc_deregister(&private_data->mymisc[i]);
+	for(i=0; i < NB_Devices; ++i){
+		misc_deregister(&mymisc[i]);
 	}
-	kfree(private_data->mymisc);		
+	kfree(mymisc);		
 	
-	kfree(private_data->global_buffer);
+	kfree(global_buffer);
 	
-	kfree(private_data->buffer_size);
+	kfree(buffer_size);
 	
 	return 0;
 }
