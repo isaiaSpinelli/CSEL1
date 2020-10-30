@@ -1,6 +1,6 @@
 /*
  * Spinelli Isaia
- * N device dynamique via le dtb et miscdevice
+ * N device (dans le dtb) avec miscdevice
 */
 
 /* skeleton.c */
@@ -16,17 +16,20 @@
 
 #define BUFFER_SIZE	 1024
 
+
 /* Structure permettant de mémoriser les informations importantes du module */
 struct priv
 {	
-	char *global_buffer;
-	int *buffer_size;
-	
-	int NB_Devices;
-	
-	struct miscdevice* mymisc;
-	int offset_minor;
+	char buffer[BUFFER_SIZE];
+	int buffer_size;	
+	struct miscdevice mymisc;
 };
+
+struct priv_data {
+	int nb_devices;
+	struct priv* priv;
+};
+
 
 
 int countDeviceOn(struct device_node* dt_node);
@@ -36,7 +39,6 @@ static ssize_t skeleton_read(struct file *filp, char __user *buf,
             
 static ssize_t skeleton_write(struct file *filp, const char __user *buf,
 			size_t count, loff_t *ppos);
-
 
 static int skeleton__open(struct inode* node, struct file * f);
 
@@ -67,39 +69,28 @@ static int skeleton__open(struct inode* node, struct file * f){
 static ssize_t skeleton_read(struct file *filp, char __user *buf,
             size_t count, loff_t *ppos)
 {	
-	int idx ;
-	struct priv *private_data ;
-	
-	struct miscdevice *miscdev = filp->private_data;
-
-    private_data = container_of(&miscdev, struct priv, mymisc);
-	
 	/* Récupération des informations du module (structure privée) */
-	//private_data = (struct priv *) filp->private_data;
+	struct priv *private_data = container_of(filp->private_data, struct priv, mymisc);
 	
-    // Crée l'index du tableau en fonction du numero minor
-    idx = (private_data->offset_minor - iminor(filp->f_inode)) * BUFFER_SIZE;
-    
     pr_info ("Lecture !\n");
     
-    if (buf == 0 || count < private_data->buffer_size[idx]) {
+    if (buf == 0 || count < private_data->buffer_size) {
         return 0;
     }
     
-     if (*ppos >= private_data->buffer_size[idx]) {
+     if (*ppos >= private_data->buffer_size) {
         return 0;
     }
 
-    
     // Copier le buffer global dans l'espace utilisateur (buf).
-    if ( copy_to_user(buf, (private_data->global_buffer+idx), private_data->buffer_size[idx]) != 0 ) {
+    if ( copy_to_user(buf, private_data->buffer, private_data->buffer_size) != 0 ) {
 		return 0;
 	}
 	
 	// màj de la position
-    *ppos = private_data->buffer_size[idx];
+    *ppos = private_data->buffer_size;
 
-    return private_data->buffer_size[idx];
+    return private_data->buffer_size;
     
 }
 
@@ -112,15 +103,9 @@ static ssize_t skeleton_write(struct file *filp, const char __user *buf,
              size_t count, loff_t *ppos)
              
 {	
-	int idx;
-	struct priv *private_data ;
-	
 	/* Récupération des informations du module (structure privée) */
-	//private_data = (struct priv *) filp->private_data;
+	struct priv *private_data = container_of(filp->private_data, struct priv, mymisc);
 	
-	// Crée l'index du tableau en fonction du numero minor
-	idx = (private_data->offset_minor - iminor(filp->f_inode)) * BUFFER_SIZE;
-    
     pr_info ("Ecriture !\n");
     
     if (count == 0 ) {
@@ -137,13 +122,13 @@ static ssize_t skeleton_write(struct file *filp, const char __user *buf,
     
     // Copier un bloc de données à partir de l'espace utilisateur (buf)
 	// dans la mémoire alloué (global buffer)
-	if ( copy_from_user((private_data->global_buffer+idx), buf, count) != 0) { 
+	if ( copy_from_user(private_data->buffer, buf, count) != 0) { 
 		return 0;
 	}
 
-	(private_data->global_buffer+idx)[count] = '\0';
+	private_data->buffer[count] = '\0';
 	
-	private_data->buffer_size[idx] = count+1;
+	private_data->buffer_size = count+1;
 
 	return count;
 }
@@ -160,37 +145,36 @@ MODULE_LICENSE ("GPL");
 static int skeleton_probe(struct platform_device *pdev)
 {
 	/* Déclaration de la structure priv */
-    struct priv *private_data;
 	int retval;
 	int i =0;
 	struct device_node* dt_node = pdev->dev.of_node;
 	pr_info ("Linux pilote skeleton : skeleton_probe\n");	
-	
+
 	/* Allocation mémoire kernel pour la structure priv (informations du module)*/
-    private_data = kmalloc(sizeof(*private_data), GFP_KERNEL);
+	struct priv_data* priv_data = devm_kzalloc(&(pdev->dev), sizeof(*priv_data), GFP_KERNEL);
 	/* Si la fonction kmallos à échoué */
-    if (private_data == NULL) {
+    if (priv_data == NULL) {
         printk(KERN_ERR "Failed to allocate memory for private data!\n");
 		/* Met à jour la valeur de retour (Out of memory)*/
         return -ENOMEM;
     }
 	
+	priv_data->nb_devices = countDeviceOn(dt_node);
+	pr_info("NB_Devices = %d \n", priv_data->nb_devices);
+
+	/* Allocation mémoire kernel pour la structure priv (informations du module)*/
+    priv_data->priv = devm_kcalloc(&(pdev->dev), priv_data->nb_devices, sizeof(struct priv), GFP_KERNEL);
+	/* Si la fonction kmallos à échoué */
+    if (priv_data->priv == NULL) {
+        printk(KERN_ERR "Failed to allocate memory for private data!\n");
+		/* Met à jour la valeur de retour (Out of memory)*/
+        return -ENOMEM;
+    }
 	
 	/* Lis le pointeur de la structure contenant les informations du module au platform_device coresspondant (permet de le get dans la fonction remove)*/
-    platform_set_drvdata(pdev, private_data);
+    platform_set_drvdata(pdev, priv_data);
 	
-	private_data->NB_Devices = countDeviceOn(dt_node);
 	
-	pr_info("NB_Devices = %d \n", private_data->NB_Devices);
-	
-	// Alloue à 0 la structure misc device le nombre de device demandé
-	private_data->mymisc = kzalloc(sizeof(*private_data->mymisc) * private_data->NB_Devices, GFP_KERNEL);
-    if (private_data->mymisc == NULL) {
-        printk(KERN_ERR "Failed to allocate memory for mymisc!\n");
-        retval = -ENOMEM;
-		return retval;
-    }
-    
     if (dt_node) {
 		const char* attr = 0;
 		struct device_node* child = 0;
@@ -200,62 +184,32 @@ static int skeleton_probe(struct platform_device *pdev)
 			retval = of_property_read_string(child, "attribute", &attr);
 			if (attr && retval == 0){
 				if (strcmp (attr, "on") == 0) {
-					private_data->mymisc[i].minor = MISC_DYNAMIC_MINOR;
-					private_data->mymisc[i].name = child->full_name;
-					private_data->mymisc[i].fops = &my_fops;
-					private_data->mymisc[i].mode = 0777,
-					retval = misc_register(&private_data->mymisc[i]);
+					priv_data->priv[i].mymisc.minor = MISC_DYNAMIC_MINOR;
+					priv_data->priv[i].mymisc.name = child->full_name;
+					priv_data->priv[i].mymisc.fops = &my_fops;
+					priv_data->priv[i].mymisc.mode = 0777,
+					retval = misc_register(&priv_data->priv[i].mymisc);
 					i++;
 					if (retval) return retval;
 				}
-				
-
 			}
 		}
 	}
-	
-	
-	// Enregistre l'offset des numeros minor
-	private_data->offset_minor = private_data->mymisc[0].minor ;
-	
-	// Alloue à 0 un tableau 2D x*y  
-	private_data->global_buffer = kzalloc(private_data->NB_Devices * BUFFER_SIZE * sizeof(char) , GFP_KERNEL);
-	if (private_data->global_buffer == NULL) {
-        printk(KERN_ERR "Failed to allocate memory for global_buffer!\n");
-        retval = -ENOMEM;
-		return retval;
-    }
-    
-    // Alloue à 0 l index des différents tableau
-    private_data->buffer_size = kzalloc(private_data->NB_Devices * sizeof(int) , GFP_KERNEL);
-	if (private_data->buffer_size == NULL) {
-        printk(KERN_ERR "Failed to allocate memory for buffer_size!\n");
-        retval = -ENOMEM;
-		return retval;
-    }
-	
-	
+		
 	return 0;
 }
 
 /* Fonction remove appelée lors du "débranchement" du périphérique (pdev est un poiteur sur une structure contenant toutes les informations du device retiré) */
 static int skeleton_remove(struct platform_device *pdev)
 {
-	int i;
-	struct priv *private_data;
+	int i=0;
+	/* Récupère l'adresse de la structure priv correspondant au platform_device reçu (précèdemment lié dans la fonction probe)*/
+	struct priv_data *priv_data = platform_get_drvdata(pdev);
 	pr_info ("Linux pilote skeleton : skeleton_remove\n");	
 	
-	/* Récupère l'adresse de la structure priv correspondant au platform_device reçu (précèdemment lié dans la fonction probe)*/
-    private_data = platform_get_drvdata(pdev);
-	
-	for(i=0; i < private_data->NB_Devices; ++i){
-		misc_deregister(&private_data->mymisc[i]);
+	for(i=0; i < priv_data->nb_devices; ++i){
+		misc_deregister(&priv_data->priv[i].mymisc);
 	}
-	kfree(private_data->mymisc);		
-	
-	kfree(private_data->global_buffer);
-	
-	kfree(private_data->buffer_size);
 	
 	return 0;
 }
