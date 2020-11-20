@@ -1,0 +1,55 @@
+MONITOR STATE MEMORY :  
+
+cat /sys/fs/cgroup/memory/mem/memory.usage_in_bytes
+OR
+htop -> f6 (sort by ) -> % mem
+
+MOUNT CGROUPE :
+
+mount -t tmpfs none /sys/fs/cgroup
+
+MOUNT MEMORY :
+
+mkdir /sys/fs/cgroup/memory
+mount -t cgroup -o memory memory /sys/fs/cgroup/memory
+
+MOUNT CPU :
+
+mkdir /sys/fs/cgroup/cpuset
+mount -t cgroup -o cpu,cpuset cpuset /sys/fs/cgroup/cpuset
+
+CREATE GROUPE :
+
+mkdir /sys/fs/cgroup/memory/mem
+mkdir /sys/fs/cgroup/cpuset/high
+mkdir /sys/fs/cgroup/cpuset/low
+
+ATTACH THE SHELL TO THIS GROUP
+
+echo $$ > /sys/fs/cgroup/memory/mem/tasks
+
+LIMIT MEMORY USE TO 20MB
+
+echo 20M > /sys/fs/cgroup/memory/mem/memory.limit_in_bytes
+->
+Memory cgroup out of memory: Killed process 322 (app)
+
+INDICATE CPU & NODE MEMORY TO USE
+
+echo 3 > /sys/fs/cgroup/cpuset/high/cpuset.cpus
+echo 0 > /sys/fs/cgroup/cpuset/high/cpuset.mems
+echo 2 > /sys/fs/cgroup/cpuset/low/cpuset.cpus
+echo 0 > /sys/fs/cgroup/cpuset/low/cpuset.mems
+
+INDICATE SHARED CPU 
+
+echo 3 > /sys/fs/cgroup/cpuset/low/cpuset.cpus
+
+echo 768 > /sys/fs/cgroup/cpuset/high/cpu.shares 
+echo 256 > /sys/fs/cgroup/cpuset/low/cpu.shares 
+
+
+
+
+Documentation: <Linux sources>/Documentation/cgroups
+https://www.kernel.org/doc/Documentation/cgroup-v1/cgroups.txt
