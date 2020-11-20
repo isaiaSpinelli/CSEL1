@@ -1,9 +1,7 @@
 /**
  * Autĥor:	Isaia Spinelli
- * Date:	06.11.2020
- * toggle led.
- * Period & Duty cycle possible in args  [ periode[ms] / duty-cylce[%] (default: 250ms / 50 %)
- * Example : ./app 500 10
+ * Date:	23.10.2020
+ * Utilisation de Select via le driver /Pilote_ex2/ex7_Op_Bloq
  */
 
 #include <sys/types.h>
@@ -20,20 +18,6 @@
 #include <sys/timerfd.h>
 #include <string.h>
 
-// Structure sharded
-struct my_struct {
-	int duty;
-	int led_fd;
-	int k1_fd;
-	int k2_fd;
-	int k3_fd;
-	int timer_fd;
-	
-};
-
-long periodTimerMs = 250; // 2Hz
-
-
 /*
  * status led - gpioa.10 --> gpio10
  * power led  - gpiol.10 --> gpio362
@@ -49,12 +33,7 @@ long periodTimerMs = 250; // 2Hz
 
 
 void toggleLed(int led);
-// handler
-void handleTimer_1(struct my_struct my_data);
-void handleK1(struct my_struct my_data);
-void handleK2(struct my_struct my_data);
-void handleK3(struct my_struct my_data);
-
+void handleTimer(int duty, int led);
 static int open_gpio(const char* GPIO);
 int setupTimeTimer(int tfd, long periodTimerMs);
 
@@ -82,7 +61,9 @@ static int open_led()
 
 int main(int argc, char* argv[]) 
 {
-	int duty = 50;		// 50 %
+	
+	long duty = 50;		// 50 %
+	long periodTimerMs = 250; // 2Hz
 
 	// GET PARAMETS WITH ARGS 
 	if (argc == 1) {
@@ -101,7 +82,7 @@ int main(int argc, char* argv[])
 	   }
    }
 	
-	printf("Duty = %d\n", duty );
+	printf("Duty = %ld\n", duty );
 
 
 	// OPEN GREEN LED 
@@ -139,7 +120,7 @@ int main(int argc, char* argv[])
 	// ADD POLL TIMER
 	struct epoll_event ev;
 	ev.events = EPOLLIN;
-	ev.data.ptr = handleTimer_1;
+	ev.data.fd = tfd;
 	if (epoll_ctl(epfd, EPOLL_CTL_ADD, tfd, &ev) == -1) {
 		printf("epoll_ctl(ADD) failed: errno=%d\n", errno);
 		close(epfd);
@@ -150,7 +131,7 @@ int main(int argc, char* argv[])
 	// ADD POLL K1
 	struct epoll_event ev_K1;
 	ev_K1.events = EPOLLERR;
-	ev_K1.data.ptr = handleK1;
+	ev_K1.data.fd = K1;
 	if (epoll_ctl(epfd, EPOLL_CTL_ADD, K1, &ev_K1) == -1) {
 		printf("epoll_ctl(ADD) failed: errno=%d\n", errno);
 		close(epfd);
@@ -161,7 +142,7 @@ int main(int argc, char* argv[])
 	// ADD POLL K2
 	struct epoll_event ev_K2;
 	ev_K2.events = EPOLLERR;
-	ev_K2.data.ptr = handleK2;
+	ev_K2.data.fd = K2;
 	if (epoll_ctl(epfd, EPOLL_CTL_ADD, K2, &ev_K2) == -1) {
 		printf("epoll_ctl(ADD) failed: errno=%d\n", errno);
 		close(epfd);
@@ -172,7 +153,7 @@ int main(int argc, char* argv[])
 	// ADD POLL K3
 	struct epoll_event ev_K3;
 	ev_K3.events = EPOLLERR;
-	ev_K3.data.ptr = handleK3;
+	ev_K3.data.fd = K3;
 	if (epoll_ctl(epfd, EPOLL_CTL_ADD, K3, &ev_K3) == -1) {
 		printf("epoll_ctl(ADD) failed: errno=%d\n", errno);
 		close(epfd);
@@ -184,16 +165,8 @@ int main(int argc, char* argv[])
 	
 	struct epoll_event events[4];
 	int nr;
-	
-	// prepare struct
-	struct my_struct my_data;
-	my_data.duty = duty;
-	my_data.led_fd = led;
-	my_data.k1_fd = K1;
-	my_data.k2_fd = K2;
-	my_data.k3_fd = K3;
-	my_data.timer_fd = tfd;
 
+	
 	while(1) {
 		
 		// WAIT EVENT
@@ -213,10 +186,59 @@ int main(int argc, char* argv[])
 		
 		// HANDLE EVENTS 
 		for (int i=0; i<nr; i++) {
+			// TIMER
+			if (events[i].data.fd == tfd){
+				uint64_t value;
+				read(tfd, &value, 8);
+				handleTimer(duty, led);
+			}
+			// K1
+			if (events[i].data.fd == K1){
+				uint64_t value;
+				read(K1, &value, 8);
+				
+				if (periodTimerMs < 60000) {	// max 1 min
+					periodTimerMs += 100;
+				} else {
+					printf("Period is max ! \n");
+				}
+							
+				if ( setupTimeTimer(tfd, periodTimerMs) == EXIT_FAILURE) {
+					printf("setupTimeTimerfailed: errno=%d\n", errno);
+					close(tfd);
+					return EXIT_FAILURE;
+				}
+			}
 			
-			void(*handler)( ) = events[i].data.ptr ;
-			handler(my_data);
-      
+			// K2
+			if (events[i].data.fd == K2){
+				uint64_t value;
+				read(K2, &value, 8);
+				
+				periodTimerMs = 250; // 2 Hz				
+				if ( setupTimeTimer(tfd, periodTimerMs) == EXIT_FAILURE) {
+					printf("setupTimeTimerfailed: errno=%d\n", errno);
+					close(tfd);
+					return EXIT_FAILURE;
+				}
+			}
+			
+			// K3
+			if (events[i].data.fd == K3){
+				uint64_t value;
+				read(K3, &value, 8);
+				
+				if (periodTimerMs > 100) {
+					periodTimerMs -= 100;
+				} else {
+					printf("Period is min ! \n");
+				}
+				if ( setupTimeTimer(tfd, periodTimerMs) == EXIT_FAILURE) {
+					printf("setupTimeTimerfailed: errno=%d\n", errno);
+					close(tfd);
+					return EXIT_FAILURE;
+				}
+			}
 		}
 	}
 
@@ -233,6 +255,23 @@ void toggleLed(int led){
 	else
 		pwrite (led, "0", sizeof("0"), 0);
 				
+}
+
+
+void handleTimer(int duty, int led){
+	static int count = 0;
+	
+	count++;
+	
+	if (count == duty) {
+		toggleLed(led);
+	}
+	
+	if (count >= 100){
+		toggleLed(led);
+		count = 0;
+	}
+	
 }
 
 static int open_gpio(const char* GPIO)
@@ -304,62 +343,4 @@ int setupTimeTimer(int tfd, long periodTimerMs){
 	
 	return EXIT_SUCCESS;
 				
-}
-
-void handleTimer_1(struct my_struct my_data){
-	static int count = 0;
-	
-	uint64_t value;
-	read(my_data.timer_fd, &value, 8);
-	
-	count++;
-	
-	if (count == my_data.duty) {
-		toggleLed(my_data.led_fd);
-	}
-	
-	if (count >= 100){
-		toggleLed(my_data.led_fd);
-		count = 0;
-	}
-}
-
-void handleK1(struct my_struct my_data){
-	uint64_t value;
-	read(my_data.k1_fd, &value, 8);
-	
-	if (periodTimerMs < 60000) {	// max 1 min
-		periodTimerMs += 100;
-	} else {
-		printf("Period is max ! \n");
-	}
-				
-	if ( setupTimeTimer(my_data.timer_fd, periodTimerMs) == EXIT_FAILURE) {
-		printf("setupTimeTimerfailed: errno=%d\n", errno);
-		close(my_data.timer_fd);
-	}
-}
-void handleK2(struct my_struct my_data){
-	uint64_t value;
-	read(my_data.k2_fd, &value, 8);
-	
-	periodTimerMs = 250; // 2 Hz				
-	if ( setupTimeTimer(my_data.timer_fd, periodTimerMs) == EXIT_FAILURE) {
-		printf("setupTimeTimerfailed: errno=%d\n", errno);
-		close(my_data.timer_fd);
-	}
-}
-void handleK3(struct my_struct my_data){
-	uint64_t value;
-	read(my_data.k3_fd, &value, 8);
-	
-	if (periodTimerMs > 100) {
-		periodTimerMs -= 100;
-	} else {
-		printf("Period is min ! \n");
-	}
-	if ( setupTimeTimer(my_data.timer_fd, periodTimerMs) == EXIT_FAILURE) {
-		printf("setupTimeTimerfailed: errno=%d\n", errno);
-		close(my_data.timer_fd);
-	}
 }
