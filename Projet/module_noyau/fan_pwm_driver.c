@@ -36,13 +36,46 @@ void toggleLed(void){
 	static int led_trigger = 0;
 	gpio_set_value(LED, led_trigger);
 	led_trigger = led_trigger ? (0):(1);
+	
 }
 
 //void timer_callback(void){
 void timer_callback(struct timer_list *unused){
+
+	int temp=0, ret;
 	
 	toggleLed();
 	mod_timer(&timer, jiffies + msecs_to_jiffies(1000 /freq));
+	
+	// mode automatique
+	if (mode == 0){
+		
+		
+	
+		if ((ret = thermal_zone_get_temp(cpu_thermal, &temp))) {
+			if (ret != -EAGAIN){
+				dev_warn(&cpu_thermal->device,
+					 "failed to read out thermal zone (%d)\n",
+					 ret);
+			}
+				
+			return -1;
+		} else {
+			
+			if (temp < 35000){
+				freq = 2;
+			} else if (temp < 40000){
+				freq = 5;
+			} else if (temp < 45000){
+				freq = 10;
+			} else {
+				freq = 20;
+			}
+		}
+		
+		
+		
+	}
 	
 }
 //DEFINE_TIMER(timer, timer_callback);
