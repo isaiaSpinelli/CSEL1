@@ -42,7 +42,7 @@ void toggleLed(void){
 void timer_callback(struct timer_list *unused){
 	
 	toggleLed();
-	mod_timer(&timer, jiffies + msecs_to_jiffies(1000 * 1));
+	mod_timer(&timer, jiffies + msecs_to_jiffies(1000 /freq));
 	
 }
 //DEFINE_TIMER(timer, timer_callback);
@@ -302,7 +302,7 @@ static int __init skeleton_init(void)
 	// ---- SET TIMER -----
 	pr_debug ("SET TIMER  \n");
 	timer_setup(&timer, timer_callback, 0);
-	mod_timer(&timer, jiffies + msecs_to_jiffies(1000 * 1));
+	mod_timer(&timer, jiffies + msecs_to_jiffies(1000 / freq));
 
 
     /* Crée une clase dans sysfs  */
