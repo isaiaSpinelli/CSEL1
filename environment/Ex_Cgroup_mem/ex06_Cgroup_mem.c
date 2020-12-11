@@ -1,11 +1,10 @@
 /**
- * Autĥor:	Isaia Spinelli
+ * Autĥor:	Charbon Yann & Spinelli Isaia
  * Date:	20.11.2020
  * Petite application permettant de valider la capacité des groupes de contrôle de limiter
 l’utilisation de la mémoire. 
  */
  
-
 // getpagesize
 #include <unistd.h>
 #include <stdio.h>
@@ -18,7 +17,6 @@ l’utilisation de la mémoire.
 #define NB_BYTE			1024
 
 #define BYTE_ALLOC 		SIZE_BLOCK_MB * NB_BYTE * NB_BYTE
-
 
 
 int main ()
@@ -41,9 +39,7 @@ int main ()
 	} 
 	
 	for (i=0; i<NB_BLOCK; ++i){
-		
 		free(ptr_tab[i]); 
-		
 	} 
 	 	
     return 0;
