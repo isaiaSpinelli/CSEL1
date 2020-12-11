@@ -1,0 +1,7 @@
+cd ~/workspace/nano/buildroot/output/build/linux-5.8.6/tools/perf/
+
+make clean
+
+make ARCH=arm64 CROSS_COMPILE=~/workspace/nano/buildroot/output/host/bin/aarch64-none-linux-gnu
+
+sudo cp perf ~/workspace/nano/rootfs/usr/bin/perf
