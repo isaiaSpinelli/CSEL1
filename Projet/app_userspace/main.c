@@ -11,131 +11,76 @@
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-
-#include <signal.h>
-#include <sys/socket.h>
+#include <stdint.h>
 #include <string.h>
 
 #include <sched.h>
+#include <errno.h>
 
-void catch_signal(int signo)
-{
-	printf("signal= %d catched and ignored\n", signo);
-	if (signo == 2)
-		exit(0);
-}   
+#include <mqueue.h>
 
+#define MAX_MQ_SIZE			(100)
+#define SEND_QUEUE_NAME		"/fanpwmsetqueue"
+#define RECV_QUEUE_NAME		"/fanpwmgetqueue"
 
-void child(int socket) {
+#define MAX_COMMAND_SIZE	(20)
 
-    int i;
-    const int NBSEND = 5 ;
-        
-    for (i = 0; i < NBSEND ; ++i) {
-		// sleep 1s
-		sleep(1);
-		if (i == NBSEND-1) {
-			const char hello[] = "exit";
-			write(socket, hello, sizeof(hello));
+int main(int argc, char* argv[]){
+	
+	mqd_t send_mq, recv_mq;
+    char send_buffer[MAX_MQ_SIZE];
+	char recv_buffer[MAX_MQ_SIZE];
+
+    /* open the mail queue */
+    send_mq = mq_open(SEND_QUEUE_NAME, O_WRONLY);
+    if(send_mq == -1)
+		printf("Error : couldn't open send message queue ! errno=%d Exiting \n", errno);
+
+	recv_mq = mq_open(RECV_QUEUE_NAME, O_RDONLY);
+    if(recv_mq == -1)
+		printf("Error : couldn't open recv message queue ! errno=%d Exiting \n", errno);
+
+	if(argc > 1){
+		if(!strcmp(argv[1], "--set-freq")){
+			int freq;
+			sscanf(argv[2], "%d", &freq);
+			sprintf(send_buffer, "setfreq %d", freq);
+			mq_send(send_mq, send_buffer, MAX_MQ_SIZE, 0);
+		} else if (!strcmp(argv[1], "--get-freq")){
+			sprintf(send_buffer, "getfreq %d", 0);
+			mq_send(send_mq, send_buffer, MAX_MQ_SIZE, 0);
+
+			ssize_t bytes_read;
+
+			/* receive the message */
+			bytes_read = mq_receive(recv_mq, recv_buffer, MAX_MQ_SIZE, NULL);
+			if(bytes_read > 0){
+				recv_buffer[bytes_read] = '\0';
+				printf(recv_buffer);
+				int value;
+				sscanf(recv_buffer, "%d", &value);
+				printf("freq set to %d\n", value);
+			}
+
+		} else if (!strcmp(argv[1], "--stopdaem")){
+			sprintf(send_buffer, "stop %d", 0);
+			mq_send(send_mq, send_buffer, MAX_MQ_SIZE, 0);
 		} else {
-			// send message
-			const char hello[] = "I am a child";
-			write(socket, hello, sizeof(hello));
+			printf("Unkown option\n");
 		}
-	}
-
-	close(socket);
-	
-	while(1); // for test use cpu 0    
-}
-
-void parent(int socket) {
-    int end = 0;
-    char * exitIs = NULL;
-    char buf[1024];
-    
-    while (!end) {
-		int n = read(socket, buf, sizeof(buf));
-		printf("Parent get : '%.*s'\n", n, buf);
-		exitIs = strstr(buf, "exit");
-		if (exitIs != NULL) {
-			end = 1;
-		}
-	}
-	
-	close(socket);
-
-	while(1); // for test use cpu 1
-}
-
-/**
- * Main program computing the Fibonacci numbers for a given sequence starting 
- * from 0 to a number specified at the command line. 
- */
-int main ()
-{
-	int fd[2];
-	static const int parentsocket = 0;
-    static const int childsocket = 1;
-    
-	int i = 0;
-	printf("Hello %d\n",SIGRTMAX);
-	
-	// catch all signal
-	struct sigaction act = {.sa_handler = catch_signal,};
-	for (i=0; i < SIGRTMAX ; i++){
-		sigaction (i,  &act, NULL); 
-	}
-	
-	// AF_UNIX - PF_LOCAL
-	// SOCK_STREAM SOCK_DGRAM
-	 if (socketpair(AF_UNIX, SOCK_STREAM, 0, fd) < 0) {
-	  perror("opening stream socket pair");
-	  exit(1);
-	}
-
-	pid_t pid = fork();
-	// child
-	if (pid == 0) {
-		// use core 0
-		cpu_set_t set;
-		CPU_ZERO(&set);
-		CPU_SET(0, &set);
-		int ret = sched_setaffinity(0, sizeof(cpu_set_t), &set);
-		if (ret == -1){
-			perror("sched_setaffinity");
-			exit(1);
-		}
-			
-
-		printf("I am child\n");
-		close(fd[parentsocket]); /* Close the parent file descriptor */
-        child(fd[childsocket]);
-        printf("child bye !\n");
-		
-		// parent
-	} else if (pid > 0) { 
-		
-		// use core 1
-		cpu_set_t set;
-		CPU_ZERO(&set);
-		CPU_SET(1, &set);
-		int ret = sched_setaffinity(0, sizeof(set), &set);
-		if (ret == -1){
-			perror("sched_setaffinity");
-			exit(1);
-		}
-		
-		printf("I am parent\n");
-		close(fd[childsocket]); /* Close the child file descriptor */
-        parent(fd[parentsocket]);
-        printf("Parent bye !\n");
-        
-		
 	} else {
-		printf("Error fork() \n");
+		printf("Please specify option : --set-freq [value], --get-freq, --stop\n");
 	}
-	 
-	 	
-    return 0;
+
+
+
+    /* cleanup */
+    if(mq_close(send_mq) == -1)
+		printf("Error : couldn't close send message queue ! errno=%d Exiting \n", errno);
+
+	if(mq_close(recv_mq) == -1)
+		printf("Error : couldn't close recv message queue ! errno=%d Exiting \n", errno);
+
+
+	return 0;
 }
