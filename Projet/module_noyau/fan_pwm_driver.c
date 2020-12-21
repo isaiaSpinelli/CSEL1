@@ -134,7 +134,7 @@ static ssize_t freq_show(struct device *dev,
 
 	pr_info ("freq show ! \n");
 	
-	sizeBuf = snprintf(freq_str, BUFFER_SIZE, "%d",freq);
+	sizeBuf = snprintf(freq_str, BUFFER_SIZE, "%d\n",freq);
 		
 	// Copier le buffer global dans l'espace utilisateur (buf).
     if ( copy_to_user(buf, freq_str, sizeBuf) != 0 ) {
