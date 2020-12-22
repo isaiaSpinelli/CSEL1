@@ -46,6 +46,18 @@ int main(int argc, char* argv[]){
 			sscanf(argv[2], "%d", &freq);
 			sprintf(send_buffer, "setfreq %d", freq);
 			mq_send(send_mq, send_buffer, MAX_MQ_SIZE, 0);
+
+			ssize_t bytes_read;
+
+			/* receive the message */
+			bytes_read = mq_receive(recv_mq, recv_buffer, MAX_MQ_SIZE, NULL);
+			if(bytes_read > 0){
+				recv_buffer[bytes_read] = '\0';
+				if(!strcmp(recv_buffer, "AUTO")){
+					printf("Fan is in auto mode. Cannot set freq.\n");
+				}				
+			}
+
 		} else if (!strcmp(argv[1], "--get-freq")){
 			sprintf(send_buffer, "getfreq %d", 0);
 			mq_send(send_mq, send_buffer, MAX_MQ_SIZE, 0);
@@ -56,7 +68,6 @@ int main(int argc, char* argv[]){
 			bytes_read = mq_receive(recv_mq, recv_buffer, MAX_MQ_SIZE, NULL);
 			if(bytes_read > 0){
 				recv_buffer[bytes_read] = '\0';
-				printf(recv_buffer);
 				int value;
 				sscanf(recv_buffer, "%d", &value);
 				printf("freq set to %d\n", value);
@@ -65,11 +76,61 @@ int main(int argc, char* argv[]){
 		} else if (!strcmp(argv[1], "--stopdaem")){
 			sprintf(send_buffer, "stop %d", 0);
 			mq_send(send_mq, send_buffer, MAX_MQ_SIZE, 0);
+		} else if (!strcmp(argv[1], "--get-mode")){
+			sprintf(send_buffer, "getmode %d", 0);
+			mq_send(send_mq, send_buffer, MAX_MQ_SIZE, 0);
+
+			ssize_t bytes_read;
+
+			/* receive the message */
+			bytes_read = mq_receive(recv_mq, recv_buffer, MAX_MQ_SIZE, NULL);
+			if(bytes_read > 0){
+				recv_buffer[bytes_read] = '\0';
+				int value;
+				sscanf(recv_buffer, "%d", &value);
+				printf("mode is set to %d\n", value);
+			}
+
+		} else if (!strcmp(argv[1], "--set-mode")){
+			int mode;
+			sscanf(argv[2], "%d", &mode);
+			if(mode >= 0 && mode <= 1){				
+				sprintf(send_buffer, "setmode %d", mode);
+				mq_send(send_mq, send_buffer, MAX_MQ_SIZE, 0);
+			} else {
+				printf("Mode can be 0: auto, 1:manual\n");
+			}
+			
+		} else if (!strcmp(argv[1], "--get-temp")){
+			sprintf(send_buffer, "gettemp %d", 0);
+			mq_send(send_mq, send_buffer, MAX_MQ_SIZE, 0);
+
+			ssize_t bytes_read;
+
+			/* receive the message */
+			bytes_read = mq_receive(recv_mq, recv_buffer, MAX_MQ_SIZE, NULL);
+			if(bytes_read > 0){
+				recv_buffer[bytes_read] = '\0';
+				int value;
+				sscanf(recv_buffer, "%d", &value);
+				printf("CPU temp is at %d\n", value);
+			}
+
+		} else if(!strcmp(argv[1], "--help")) {
+			printf("Please specify option : \n");
+			printf("--set-freq [value], --get-freq\n");			
+			printf("--set-mode [0,1], --get-mode\n");
+			printf("--get-temp\n");
+			printf("--stopdaemon\n");
 		} else {
 			printf("Unkown option\n");
 		}
 	} else {
-		printf("Please specify option : --set-freq [value], --get-freq, --stop\n");
+		printf("Please specify option : \n");
+		printf("--set-freq [value], --get-freq\n");		
+		printf("--set-mode [0,1], --get-mode\n");
+		printf("--get-temp\n");
+		printf("--stopdaemon\n");
 	}
 
 
