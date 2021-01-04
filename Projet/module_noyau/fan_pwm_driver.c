@@ -50,8 +50,6 @@ void timer_callback(struct timer_list *unused){
 	// mode automatique
 	if (mode == 0){
 		
-		
-	
 		if ((ret = thermal_zone_get_temp(cpu_thermal, &temp))) {
 			if (ret != -EAGAIN){
 				dev_warn(&cpu_thermal->device,
