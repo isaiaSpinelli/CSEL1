@@ -165,12 +165,17 @@ static ssize_t freq_show(struct device *dev,
 
 	pr_info ("freq show ! \n");
 	
-	sizeBuf = snprintf(freq_str, BUFFER_SIZE, "%d",freq);
+	sizeBuf = snprintf(freq_str, BUFFER_SIZE, "%d\n",freq);
+
+	pr_info ("sizeBuf = %d \n", sizeBuf);
 		
 	// Copier le buffer global dans l'espace utilisateur (buf).
+	/*
     if ( copy_to_user(buf, freq_str, sizeBuf) != 0 ) {
 		return 0;
-	}
+	}*/
+
+	strcpy(buf,freq_str);
 
 	return sizeBuf;
 }
@@ -198,12 +203,14 @@ static ssize_t temp_cpu_show(struct device *dev,
     
 	pr_info ("temp cpu = %d\n", temp); // 42564
 	
-	sizeBuf = snprintf(temp_str, BUFFER_SIZE, "%d", temp);
+	sizeBuf = snprintf(temp_str, BUFFER_SIZE, "%d\n", temp);
 		
 	// Copier le buffer global dans l'espace utilisateur (buf).
-    if ( copy_to_user(buf, temp_str, sizeBuf) != 0 ) {
+    /*if ( copy_to_user(buf, temp_str, sizeBuf) != 0 ) {
 		return 0;
-	}
+	}*/
+
+	strcpy(buf,temp_str);
 
 	return sizeBuf;
 
