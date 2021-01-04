@@ -57,7 +57,7 @@ void timer_callback(struct timer_list *unused){
 					 ret);
 			}
 				
-			return -1;
+			return ;
 		} else {
 			
 			if (temp < 35000){
@@ -116,10 +116,7 @@ static ssize_t mode_show(struct device *dev,
 	pr_info ("Actually, mode = %d\n", mode);
 	
 	
-	// Copier le buffer global dans l'espace utilisateur (buf).
-    if ( copy_to_user(buf, (void*)&modeASCII, 1) != 0 ) {
-		return 0;
-	}
+	strcpy(buf,(void*)&modeASCII);
 
 	return 1;
 
@@ -169,12 +166,6 @@ static ssize_t freq_show(struct device *dev,
 
 	pr_info ("sizeBuf = %d \n", sizeBuf);
 		
-	// Copier le buffer global dans l'espace utilisateur (buf).
-	/*
-    if ( copy_to_user(buf, freq_str, sizeBuf) != 0 ) {
-		return 0;
-	}*/
-
 	strcpy(buf,freq_str);
 
 	return sizeBuf;
@@ -205,10 +196,6 @@ static ssize_t temp_cpu_show(struct device *dev,
 	
 	sizeBuf = snprintf(temp_str, BUFFER_SIZE, "%d\n", temp);
 		
-	// Copier le buffer global dans l'espace utilisateur (buf).
-    /*if ( copy_to_user(buf, temp_str, sizeBuf) != 0 ) {
-		return 0;
-	}*/
 
 	strcpy(buf,temp_str);
 
@@ -238,11 +225,8 @@ static ssize_t temp_gpu_show(struct device *dev,
 	pr_info ("temp gpu = %d\n", temp); // 42564
 	
 	sizeBuf = snprintf(temp_str, BUFFER_SIZE, "%d", temp);
-		
-	// Copier le buffer global dans l'espace utilisateur (buf).
-    if ( copy_to_user(buf, temp_str, sizeBuf) != 0 ) {
-		return 0;
-	}
+			
+	strcpy(buf,temp_str);
 	
 	toggleLed();
 	
