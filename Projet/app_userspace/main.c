@@ -1,8 +1,11 @@
 /**
  * Autĥor:	Charbon Yann & Spinelli Isaia
  * Date:	11.12.20
- * File : 	daemon.c
- * Desc. : 	Daemon du projet CSEL1
+ * File : 	main.c
+ * Desc. : 	Application userspace  du projet CSEL1
+  * --------------
+ * NOTE : Don't forget to compile with -lrt flag for LD
+ * --------------
  */
  
 #define _GNU_SOURCE       
